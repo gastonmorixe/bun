@@ -155,7 +155,10 @@ pub fn init_external_modules(
                 result.node_modules.insert(pattern).expect("unreachable");
             }
         }
-        Target::Bun => {}
+        Target::Bun => {
+            // The `BunNodeBuiltinPatternsCompat` insertion is commented out in the Zig
+            // source's `.bun` arm too.
+        }
         _ => {}
     }
 
@@ -1853,7 +1856,10 @@ impl<'a> BundleOptions<'a> {
 }
 
 impl Drop for BundleOptions<'_> {
-    fn drop(&mut self) {}
+    fn drop(&mut self) {
+        // `define` (`Box`) and `bundler_feature_flags` (`Option<Box<StringSet>>`, `None` ≡
+        // the static empty set) drop automatically; Zig freed both by hand here.
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
