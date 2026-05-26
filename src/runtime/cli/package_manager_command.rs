@@ -386,6 +386,24 @@ Learn more about these at <magenta>https://bun.com/docs/cli/pm<r>.\n";
             if pm.options.positionals.len() > 1
                 && strings::eql_comptime(pm.options.positionals[1], b"rm")
             {
+                #[cfg(unix)]
+                // SAFETY: getuid(2) is always-successful with no preconditions.
+                let uid = unsafe { libc::getuid() };
+                #[cfg(not(unix))]
+                let uid = bun_sys::windows::user_unique_id();
+
+                let mut deleted: usize = 0;
+                {
+                    let mut bunx_subdir: Vec<u8> = Vec::new();
+                    write!(&mut bunx_subdir, ".bunx-{}", uid).expect("unreachable");
+                    if let Ok(bunx_dir) = Dir::borrow(&fd).open_at(&bunx_subdir) {
+                        let mut bunx_iter = bun_sys::iterate_dir(bunx_dir.fd());
+                        while let Ok(Some(_)) = bunx_iter.next() {
+                            deleted += 1;
+                        }
+                    }
+                }
+
                 fd.close();
 
                 let mut had_err = false;
@@ -414,19 +432,8 @@ Learn more about these at <magenta>https://bun.com/docs/cli/pm<r>.\n";
 
                     // This is to match 'bunx_command.BunxCommand.exec's logic
                     let mut prefix: Vec<u8> = Vec::new();
-                    #[cfg(unix)]
-                    {
-                        // SAFETY: getuid(2) is always-successful with no preconditions.
-                        write!(&mut prefix, "bunx-{}-", unsafe { libc::getuid() })
-                            .expect("unreachable");
-                    }
-                    #[cfg(not(unix))]
-                    {
-                        write!(&mut prefix, "bunx-{}-", bun_sys::windows::user_unique_id())
-                            .expect("unreachable");
-                    }
+                    write!(&mut prefix, "bunx-{}-", uid).expect("unreachable");
 
-                    let mut deleted: usize = 0;
                     loop {
                         let entry = match iter.next() {
                             Ok(Some(e)) => e,
