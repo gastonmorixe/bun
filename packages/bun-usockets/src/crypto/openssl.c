@@ -905,6 +905,12 @@ int us_ssl_parse_pkcs12(const char *data, size_t len, const char *pass,
   STACK_OF(X509) *extra = NULL;
   PKCS12 *p12 = NULL;
   BIO *kb = NULL, *cb = NULL, *ab = NULL;
+  if (len > INT_MAX) {
+    /* BIO_new_mem_buf takes an int; a negative value would mean
+     * "treat as a NUL-terminated string", silently misparsing the blob. */
+    *err_reason = "parse";
+    return 0;
+  }
   BIO *in = BIO_new_mem_buf(data, (int)len);
   if (!in) {
     *err_reason = "parse";

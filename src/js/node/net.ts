@@ -439,12 +439,25 @@ function SocketEmitEndNT(self, _err?) {
   // produced unhandled errors between tests across the fetch/http2 suites on
   // Windows, where loopback RSTs at teardown are routine.
   if (_err && !self.destroyed && !self[kended] && self.listenerCount("error") > 0) {
+    // The consumer can detach its 'error' listener between this close
+    // callback and destroy()'s deferred 'error' emission (a request that
+    // finished just as the reset arrived); a last-resort no-op listener keeps
+    // that race from surfacing as an uncaught exception - the no-listener
+    // case is already a documented silent close.
+    self.once("error", () => {});
     if (_err.code === undefined && typeof _err.errno === "number" && _err.errno !== 0) {
       // A codeless close error that still carries the errno (Windows IOCP
       // delivers some this way): derive the proper code from it, like Node's
-      // errnoException(nread, 'read').
-      self.destroy(new ErrnoException(_err.errno, "read"));
-    } else if (_err.code === undefined || _err.code === "ECONNRESET") {
+      // errnoException(nread, 'read'). Raw WSA values (-10054, ...) that the
+      // errno table cannot name fall through to the reset shape below instead
+      // of surfacing "Unknown system error N".
+      const er = new ErrnoException(_err.errno, "read") as Error & { code?: string };
+      if (typeof er.code === "string" && /^E[A-Z0-9]+$/.test(er.code)) {
+        self.destroy(er);
+        return;
+      }
+    }
+    if (_err.code === undefined || _err.code === "ECONNRESET") {
       // Shape a reset (or a fully bare close error) like Node's
       // errnoException(UV_ECONNRESET, 'read').
       const er = new ConnResetException("read ECONNRESET") as Error & {
@@ -467,6 +480,13 @@ function SocketEmitEndNT(self, _err?) {
     }
     self[kended] = true;
     self.push(null);
+  } else if (_err && !self.destroyed) {
+    // The error arrived after the clean EOF was already delivered (the
+    // teardown-noise case excluded from the synthesis above): nothing is left
+    // to read, but the socket still has to finish its lifecycle - close it
+    // quietly instead of leaving it open with no further events
+    // (test-net-error-twice's write-error path raced exactly this on Linux).
+    self.destroy();
   }
 }
 
