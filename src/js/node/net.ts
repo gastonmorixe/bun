@@ -432,13 +432,17 @@ function SocketEmitEndNT(self, _err?) {
   // hard-closing after a clean response would otherwise surface here as an
   // unhandled error across the proxy/http2/fetch suites under ASAN/baseline
   // timing).
-  // A reset that lands after a clean EOF was already delivered (kended) is
-  // teardown noise - a peer hard-closing once the exchange finished - not
+  // A reset that lands after the exchange already finished in BOTH
+  // directions (clean EOF delivered and nothing left being written) is
+  // teardown noise - a peer hard-closing once the exchange completed - not
   // data loss; Node would have destroyed the socket on 'end' for these
   // non-keepalive flows before the RST could ever be observed. Surfacing it
   // produced unhandled errors between tests across the fetch/http2 suites on
-  // Windows, where loopback RSTs at teardown are routine.
-  if (_err && !self.destroyed && !self[kended] && self.listenerCount("error") > 0) {
+  // Windows, where loopback RSTs at teardown are routine. A reset while the
+  // socket is still writing (the peer aborted mid-transfer) is real and is
+  // surfaced (test-net-error-twice).
+  const teardownNoise = self[kended] && (self.writableFinished || self.writableEnded);
+  if (_err && !self.destroyed && !teardownNoise && self.listenerCount("error") > 0) {
     // The consumer can detach its 'error' listener between this close
     // callback and destroy()'s deferred 'error' emission (a request that
     // finished just as the reset arrived); a last-resort no-op listener keeps
@@ -481,11 +485,10 @@ function SocketEmitEndNT(self, _err?) {
     self[kended] = true;
     self.push(null);
   } else if (_err && !self.destroyed) {
-    // The error arrived after the clean EOF was already delivered (the
-    // teardown-noise case excluded from the synthesis above): nothing is left
-    // to read, but the socket still has to finish its lifecycle - close it
-    // quietly instead of leaving it open with no further events
-    // (test-net-error-twice's write-error path raced exactly this on Linux).
+    // An error excluded from the synthesis above (teardown noise, or no
+    // listener attached): nothing more is coming, but the socket still has to
+    // finish its lifecycle - close it quietly instead of leaving it open with
+    // no further events.
     self.destroy();
   }
 }
