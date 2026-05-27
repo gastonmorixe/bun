@@ -442,7 +442,7 @@ function SocketEmitEndNT(self, _err?) {
       errno?: number;
       syscall?: string;
     };
-    er.errno = _err.errno ?? -54;
+    er.errno = _err.errno ?? (process.platform === "win32" ? -4077 : process.platform === "linux" ? -104 : -54);
     er.syscall = "read";
     self.destroy(er);
     return;
@@ -867,7 +867,7 @@ const SocketHandlers2: SocketHandler<NonNullable<import("node:net").Socket["_han
     // family-autoselection race and raw sockets handed off during a TLS
     // upgrade also report errors on close, and those must keep ending
     // cleanly.
-    if (err && err.code === "ECONNRESET" && !self.destroyed && socket === self._handle) {
+    if (err && err.code === "ECONNRESET" && !self.destroyed && socket === self._handle && self.listenerCount("error") > 0) {
       // Shape it like Node's errnoException(UV_ECONNRESET, 'read'): message,
       // code, errno and syscall all populated.
       const er = new ConnResetException("read ECONNRESET") as Error & { errno?: number; syscall?: string };

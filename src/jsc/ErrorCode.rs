@@ -683,7 +683,7 @@ impl ErrorCode {
     pub const SECRETS_INTERACTION_REQUIRED: ErrorCode = ErrorCode(313);
 
     /// == C++ `NODE_ERROR_COUNT`.
-    pub const COUNT: u16 = 312;
+    pub const COUNT: u16 = 314;
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -1303,7 +1303,9 @@ static CODE_STR: [&str; ErrorCode::COUNT as usize] = [
     "ERR_TLS_PROTOCOL_VERSION_CONFLICT",
     "ERR_TLS_PSK_SET_IDENTITY_HINT_FAILED",
     "ERR_TLS_RENEGOTIATION_DISABLED",
+    "ERR_TLS_RENEGOTIATION_UNSUPPORTED",
     "ERR_TLS_SNI_FROM_SERVER",
+    "ERR_TLS_INVALID_STATE",
     "ERR_TLS_ALPN_CALLBACK_WITH_PROTOCOLS",
     "ERR_SSL_NO_CIPHER_MATCH",
     "ERR_UNAVAILABLE_DURING_EXIT",
