@@ -123,6 +123,9 @@ extern "C" fn select_alpn_callback(
                 // and `in_` is valid for `inlen` per the callback contract.
                 unsafe { core::ptr::copy_nonoverlapping(in_, ab.ptr, wire_len) };
             }
+            // SAFETY: `ssl` is the live SSL handle passed into this ALPN
+            // callback; SSL_get_servername reads the negotiated SNI name and
+            // returns NULL or a NUL-terminated string owned by the SSL.
             let servername_ptr = unsafe { boringssl_sys::SSL_get_servername(ssl.cast_const(), 0) };
             let servername_js = if servername_ptr.is_null() {
                 JSValue::UNDEFINED
