@@ -551,8 +551,12 @@ impl ErrorCode {
     pub const TLS_PSK_SET_IDENTITY_HINT_FAILED: ErrorCode = ErrorCode(245);
     /// `ERR_TLS_RENEGOTIATION_DISABLED` (instanceof Error)
     pub const TLS_RENEGOTIATION_DISABLED: ErrorCode = ErrorCode(246);
+    /// `ERR_TLS_RENEGOTIATION_UNSUPPORTED` (instanceof Error)
+    pub const TLS_RENEGOTIATION_UNSUPPORTED: ErrorCode = ErrorCode(247);
     /// `ERR_TLS_SNI_FROM_SERVER` (instanceof Error)
     pub const TLS_SNI_FROM_SERVER: ErrorCode = ErrorCode(248);
+    /// `ERR_TLS_INVALID_STATE` (instanceof Error)
+    pub const TLS_INVALID_STATE: ErrorCode = ErrorCode(249);
     /// `ERR_TLS_ALPN_CALLBACK_WITH_PROTOCOLS` (instanceof TypeError)
     pub const TLS_ALPN_CALLBACK_WITH_PROTOCOLS: ErrorCode = ErrorCode(250);
     /// `ERR_SSL_NO_CIPHER_MATCH` (instanceof Error)
