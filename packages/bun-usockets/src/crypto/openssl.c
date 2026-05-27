@@ -1377,8 +1377,15 @@ struct us_socket_t *us_internal_ssl_on_close(struct us_socket_t *s, int code, vo
 
 struct us_socket_t *us_internal_ssl_on_end(struct us_socket_t *s) {
   ssl_set_loop_data(s);
-  /* TCP FIN under TLS — send our close_notify (if not already) and raw-close. */
-  return ssl_close(s, 0, NULL);
+  /* TCP FIN under TLS: the peer's write side is gone, so no close_notify reply
+   * is coming. Send ours best-effort and raw-close now — deferring (the
+   * code==0 path in ssl_close) would wait forever, and with native
+   * allowHalfOpen=true the loop.c caller no longer raw-closes for us. */
+  s = ssl_close(s, 0, NULL);
+  if (s && !us_socket_is_closed(s)) {
+    s = us_internal_socket_close_raw(s, LIBUS_SOCKET_CLOSE_CODE_CLEAN_SHUTDOWN, NULL);
+  }
+  return s;
 }
 
 struct us_socket_t *us_internal_ssl_on_writable(struct us_socket_t *s) {
