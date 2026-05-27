@@ -432,10 +432,21 @@ function SocketEmitEndNT(self, _err?) {
   // hard-closing after a clean response would otherwise surface here as an
   // unhandled error across the proxy/http2/fetch suites under ASAN/baseline
   // timing).
-  if (_err && !self.destroyed && self.listenerCount("error") > 0) {
-    if (_err.code === undefined || _err.code === "ECONNRESET") {
-      // Shape a reset (or a codeless close error - Windows IOCP can deliver
-      // only errno/message) like Node's errnoException(UV_ECONNRESET, 'read').
+  // A reset that lands after a clean EOF was already delivered (kended) is
+  // teardown noise - a peer hard-closing once the exchange finished - not
+  // data loss; Node would have destroyed the socket on 'end' for these
+  // non-keepalive flows before the RST could ever be observed. Surfacing it
+  // produced unhandled errors between tests across the fetch/http2 suites on
+  // Windows, where loopback RSTs at teardown are routine.
+  if (_err && !self.destroyed && !self[kended] && self.listenerCount("error") > 0) {
+    if (_err.code === undefined && typeof _err.errno === "number" && _err.errno !== 0) {
+      // A codeless close error that still carries the errno (Windows IOCP
+      // delivers some this way): derive the proper code from it, like Node's
+      // errnoException(nread, 'read').
+      self.destroy(new ErrnoException(_err.errno, "read"));
+    } else if (_err.code === undefined || _err.code === "ECONNRESET") {
+      // Shape a reset (or a fully bare close error) like Node's
+      // errnoException(UV_ECONNRESET, 'read').
       const er = new ConnResetException("read ECONNRESET") as Error & {
         code: string;
         errno?: number;

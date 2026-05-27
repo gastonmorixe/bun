@@ -134,6 +134,17 @@ extern "C" fn select_alpn_callback(
                 let name = unsafe { core::ffi::CStr::from_ptr(servername_ptr) };
                 ZigString::init(name.to_bytes()).to_js(&global)
             };
+            // The user callback (and the error handler below) run from inside
+            // SSL_do_handshake on this socket: JS that writes to or destroys a
+            // different TLS socket on the same loop re-points the per-loop BIO
+            // routing state, and this handshake's next flight would land on
+            // that other socket's fd. Snapshot and restore it around every
+            // JS-running region.
+            let mut saved_loop_state: [*mut c_void; 5] = [core::ptr::null_mut(); 5];
+            tls_socket_functions::ffi::us_internal_ssl_loop_state_save(
+                boringssl_sys::SSL::opaque_ref(ssl),
+                saved_loop_state.as_mut_ptr(),
+            );
             let result =
                 match callback.call(&global, this_value, &[this_value, servername_js, buffer]) {
                     Ok(v) => v,
@@ -141,11 +152,17 @@ extern "C" fn select_alpn_callback(
                 };
             if let Some(err_value) = result.to_error() {
                 let _ = handlers.call_error_handler(this_value, &[this_value, err_value]);
+                tls_socket_functions::ffi::us_internal_ssl_loop_state_restore(
+                    saved_loop_state.as_mut_ptr(),
+                );
                 if scope.exit() {
                     this.handlers.set(None);
                 }
                 return boringssl_sys::SSL_TLSEXT_ERR_ALERT_FATAL;
             }
+            tls_socket_functions::ffi::us_internal_ssl_loop_state_restore(
+                saved_loop_state.as_mut_ptr(),
+            );
             if scope.exit() {
                 this.handlers.set(None);
             }

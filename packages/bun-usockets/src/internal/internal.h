@@ -407,3 +407,8 @@ void us_internal_socket_group_unlink_connecting_socket(us_socket_group_r group, 
 int us_raw_root_certs(struct us_cert_string_t **out);
 
 #endif // INTERNAL_H
+
+/* Save/restore the per-loop BIO routing state around in-handshake JS
+ * callbacks (SNI / ALPN). Defined in crypto/openssl.c. */
+void us_internal_ssl_loop_state_save(void *ssl, void **out5);
+void us_internal_ssl_loop_state_restore(void **saved5);

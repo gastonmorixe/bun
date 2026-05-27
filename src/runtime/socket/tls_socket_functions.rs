@@ -175,6 +175,10 @@ pub mod ffi {
             out_len: &mut c_uint,
         );
         pub safe fn SSL_get_ex_data(ssl: &SSL, idx: c_int) -> *mut c_void;
+        /// Save/restore the per-loop BIO routing state around in-handshake JS
+        /// callbacks (defined in usockets' openssl.c).
+        pub safe fn us_internal_ssl_loop_state_save(ssl: &SSL, out5: *mut *mut c_void);
+        pub safe fn us_internal_ssl_loop_state_restore(saved5: *mut *mut c_void);
         pub safe fn SSL_renegotiate(ssl: &SSL) -> c_int;
         pub safe fn SSL_set_renegotiate_mode(
             ssl: &SSL,

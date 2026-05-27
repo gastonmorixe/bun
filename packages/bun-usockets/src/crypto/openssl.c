@@ -387,6 +387,30 @@ static long BIO_s_custom_ctrl(BIO *bio, int cmd, long num, void *user) {
   }
 }
 
+/* Save/restore the per-loop BIO routing state around a JS callback that runs
+ * from inside SSL_do_handshake/SSL_read: user JS that writes to or destroys a
+ * different TLS socket on the same loop re-points loop_ssl_data->ssl_socket
+ * (and may consume the read-input window), and the interrupted handshake's
+ * next BIO_write would otherwise land on that other socket's fd. */
+void us_internal_ssl_loop_state_save(void *ssl_ptr, void **out) {
+  SSL *ssl = (SSL *)ssl_ptr;
+  struct loop_ssl_data *d = (struct loop_ssl_data *)BIO_get_data(SSL_get_wbio(ssl));
+  out[0] = d;
+  out[1] = d ? (void *)d->ssl_socket : NULL;
+  out[2] = d ? (void *)d->ssl_read_input : NULL;
+  out[3] = d ? (void *)(uintptr_t)d->ssl_read_input_length : NULL;
+  out[4] = d ? (void *)(uintptr_t)d->ssl_read_input_offset : NULL;
+}
+
+void us_internal_ssl_loop_state_restore(void **saved) {
+  struct loop_ssl_data *d = (struct loop_ssl_data *)saved[0];
+  if (!d) return;
+  d->ssl_socket = (struct us_socket_t *)saved[1];
+  d->ssl_read_input = (char *)saved[2];
+  d->ssl_read_input_length = (unsigned int)(uintptr_t)saved[3];
+  d->ssl_read_input_offset = (unsigned int)(uintptr_t)saved[4];
+}
+
 static int BIO_s_custom_write(BIO *bio, const char *data, int length) {
   struct loop_ssl_data *loop_ssl_data = (struct loop_ssl_data *)BIO_get_data(bio);
 
@@ -1763,7 +1787,10 @@ static int sni_cb(SSL *ssl, int *al, void *arg) {
        * Node's does and an attacker-controlled servername cannot grow the
        * tree. The callback runs JS and may close this listener; nothing
        * below touches ls after it returns. */
+      void *saved_loop_state[5];
+      us_internal_ssl_loop_state_save(ssl, saved_loop_state);
       SSL_CTX *dyn = ls->on_server_name(ls, hostname);
+      us_internal_ssl_loop_state_restore(saved_loop_state);
       if (dyn) {
         SSL_set_SSL_CTX(ssl, dyn);
         /* The resolver hands back an owned reference and SSL_set_SSL_CTX

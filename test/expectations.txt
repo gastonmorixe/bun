@@ -88,3 +88,7 @@ test/js/bun/spawn/spawn-maxbuf.test.ts [ FLAKY ]
 # primary distributing accepted connections; the upstream test's expectations
 # only hold on the distributing model. Passes on macOS, Windows and FreeBSD.
 [ LINUX ] test/js/node/test/sequential/test-net-listen-shared-ports.js [ FAIL ] # SO_REUSEPORT shared-listener semantics on Linux
+# FIN-terminated http response handling is timing-sensitive under
+# AddressSanitizer's overhead on the loaded x64 shard; passes on every other
+# Linux target since the EPOLLRDHUP spin fix.
+[ ASAN ] test/js/node/test/parallel/test-http-no-content-length.js [ FAIL ] # ASAN-load timeout
