@@ -8,8 +8,8 @@ use bun_install::dependency::Dependency;
 use bun_install::lockfile::{LoadResult, Lockfile, package::PackageColumns as _, tree};
 use bun_install::npm as Npm;
 use bun_install::package_manager_real::{
-    CommandLineArguments, Subcommand, get_cache_directory, package_manager_options::LogLevel,
-    setup_global_dir,
+    CommandLineArguments, Subcommand, fetch_cache_directory_path, get_cache_directory,
+    package_manager_options::LogLevel, setup_global_dir,
 };
 use bun_install::{DependencyID, PackageID, PackageManager, migration};
 use bun_paths::{self as Path, PathBuffer};
@@ -393,13 +393,22 @@ Learn more about these at <magenta>https://bun.com/docs/cli/pm<r>.\n";
                 let uid = bun_sys::windows::user_unique_id();
 
                 let mut deleted: usize = 0;
+                let mut bunx_root: Option<Vec<u8>> = None;
                 {
-                    let mut bunx_subdir: Vec<u8> = Vec::new();
-                    write!(&mut bunx_subdir, ".bunx-{}", uid).expect("unreachable");
-                    if let Ok(bunx_dir) = Dir::borrow(&fd).open_at(&bunx_subdir) {
-                        let mut bunx_iter = bun_sys::iterate_dir(bunx_dir.fd());
-                        while let Ok(Some(_)) = bunx_iter.next() {
-                            deleted += 1;
+                    let user_cache = fetch_cache_directory_path(pm.env_mut(), None);
+                    if !user_cache.is_node_modules {
+                        let mut root = user_cache.path;
+                        while root.last() == Some(&Path::SEP) {
+                            root.pop();
+                        }
+                        root.push(Path::SEP);
+                        write!(&mut root, ".bunx-{}", uid).expect("unreachable");
+                        if let Ok(bunx_dir) = Dir::open(&root) {
+                            let mut bunx_iter = bun_sys::iterate_dir(bunx_dir.fd());
+                            while let Ok(Some(_)) = bunx_iter.next() {
+                                deleted += 1;
+                            }
+                            bunx_root = Some(root);
                         }
                     }
                 }
@@ -407,6 +416,13 @@ Learn more about these at <magenta>https://bun.com/docs/cli/pm<r>.\n";
                 fd.close();
 
                 let mut had_err = false;
+
+                if let Some(bunx_root) = &bunx_root {
+                    if let Err(err) = bun_sys::delete_tree_absolute(bunx_root) {
+                        Output::err(err, "Could not delete {s}", (bstr::BStr::new(bunx_root),));
+                        had_err = true;
+                    }
+                }
 
                 if let Err(err) = bun_sys::delete_tree_absolute(outpath) {
                     Output::err(err, "Could not delete {s}", (bstr::BStr::new(outpath),));
