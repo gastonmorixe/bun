@@ -426,8 +426,13 @@ function SocketEmitEndNT(self, _err?) {
   // A read error delivered with the close (e.g. a received RST surfacing as
   // ECONNRESET) is not a clean EOF — Node destroys the socket with the error
   // ("read ECONNRESET") instead of emitting a graceful 'end'. Guard on
-  // !destroyed so an already-torn-down socket isn't re-destroyed.
-  if (_err && !self.destroyed) {
+  // !destroyed so an already-torn-down socket isn't re-destroyed, and on an
+  // 'error' listener so callers that opted into error handling get Node's
+  // behavior while those that did not keep the previous silent EOF (a server
+  // hard-closing after a clean response would otherwise surface here as an
+  // unhandled error across the proxy/http2/fetch suites under ASAN/baseline
+  // timing).
+  if (_err && !self.destroyed && self.listenerCount("error") > 0) {
     if (_err.code === "ECONNRESET") {
       // Shape the reset like Node's errnoException(UV_ECONNRESET, 'read'):
       // message "read ECONNRESET" with errno/syscall/code all populated.
