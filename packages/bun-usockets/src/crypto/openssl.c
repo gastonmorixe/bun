@@ -20,6 +20,7 @@
 #include "internal/internal.h"
 #include "libusockets.h"
 #include <string.h>
+#include <limits.h>
 #include <stdatomic.h>
 
 /* These are in sni_tree.cpp */
