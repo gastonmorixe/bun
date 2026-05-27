@@ -433,18 +433,21 @@ function SocketEmitEndNT(self, _err?) {
   // unhandled error across the proxy/http2/fetch suites under ASAN/baseline
   // timing).
   if (_err && !self.destroyed && self.listenerCount("error") > 0) {
-    // Shape any close-delivered read error like Node's
-    // errnoException(UV_ECONNRESET, 'read'): on Windows IOCP the native error
-    // can arrive without a .code (only errno/message), so normalize rather
-    // than letting a codeless error reach the consumer.
-    const er = new ConnResetException("read ECONNRESET") as Error & {
-      code: string;
-      errno?: number;
-      syscall?: string;
-    };
-    er.errno = _err.errno ?? (process.platform === "win32" ? -4077 : process.platform === "linux" ? -104 : -54);
-    er.syscall = "read";
-    self.destroy(er);
+    if (_err.code === undefined || _err.code === "ECONNRESET") {
+      // Shape a reset (or a codeless close error - Windows IOCP can deliver
+      // only errno/message) like Node's errnoException(UV_ECONNRESET, 'read').
+      const er = new ConnResetException("read ECONNRESET") as Error & {
+        code: string;
+        errno?: number;
+        syscall?: string;
+      };
+      er.errno = _err.errno ?? (process.platform === "win32" ? -4077 : process.platform === "linux" ? -104 : -54);
+      er.syscall = "read";
+      self.destroy(er);
+    } else {
+      // Any other coded error (ETIMEDOUT, EPIPE, ...) keeps its identity.
+      self.destroy(_err);
+    }
     return;
   }
   if (!self[kended]) {
