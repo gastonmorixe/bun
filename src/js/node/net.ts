@@ -433,20 +433,18 @@ function SocketEmitEndNT(self, _err?) {
   // unhandled error across the proxy/http2/fetch suites under ASAN/baseline
   // timing).
   if (_err && !self.destroyed && self.listenerCount("error") > 0) {
-    if (_err.code === "ECONNRESET") {
-      // Shape the reset like Node's errnoException(UV_ECONNRESET, 'read'):
-      // message "read ECONNRESET" with errno/syscall/code all populated.
-      const er = new ConnResetException("read ECONNRESET") as Error & {
-        code: string;
-        errno?: number;
-        syscall?: string;
-      };
-      er.errno = _err.errno;
-      er.syscall = "read";
-      self.destroy(er);
-    } else {
-      self.destroy(_err);
-    }
+    // Shape any close-delivered read error like Node's
+    // errnoException(UV_ECONNRESET, 'read'): on Windows IOCP the native error
+    // can arrive without a .code (only errno/message), so normalize rather
+    // than letting a codeless error reach the consumer.
+    const er = new ConnResetException("read ECONNRESET") as Error & {
+      code: string;
+      errno?: number;
+      syscall?: string;
+    };
+    er.errno = _err.errno ?? -54;
+    er.syscall = "read";
+    self.destroy(er);
     return;
   }
   if (!self[kended]) {
