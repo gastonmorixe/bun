@@ -2296,7 +2296,12 @@ function internalConnect(self, options, address, port, addressType, localAddress
     req.tls = tls;
 
     err = kConnectTcp(self, addressType, req, address, port);
-    if (err === undefined && hasObserver("net")) {
+    // kConnectTcp returns 0 (not undefined) on the async-connect path, so the
+    // perf context must be established whenever the attempt was dispatched
+    // without a synchronous error — matching the `if (err)` failure check
+    // below. Guarding on `err === undefined` never fired, so the 'net' entry
+    // was never produced for the TCP path.
+    if (!err && hasObserver("net")) {
       startPerf(self, kPerfHooksNetConnectContext, {
         type: "net",
         name: "connect",
