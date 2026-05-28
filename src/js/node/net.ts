@@ -916,6 +916,9 @@ const SocketHandlers2: SocketHandler<NonNullable<import("node:net").Socket["_han
     ) {
       // Shape it like Node's errnoException(UV_ECONNRESET, 'read'): message,
       // code, errno and syscall all populated.
+      // Same late-detach guard as SocketEmitEndNT: the listener seen at
+      // close-time can be gone by the deferred 'error' emission.
+      self.once("error", () => {});
       const er = new ConnResetException("read ECONNRESET") as Error & { errno?: number; syscall?: string };
       er.errno = err.errno;
       er.syscall = "read";
