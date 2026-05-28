@@ -675,8 +675,17 @@ void us_internal_dispatch_ready_poll(struct us_poll_t *p, int error, int eof, in
                     return;
                 }
                 if(s->flags.allow_half_open) {
-                    /* We got a Error but is EOF and we allow half open so stop polling for readable and keep going*/
-                    us_poll_change(&s->p, loop, us_poll_events(&s->p) & LIBUS_SOCKET_WRITABLE);
+                    /* EOF with half-open allowed: stop polling readable but KEEP
+                     * polling writable. Masking with the current events dropped
+                     * writable when the EOF landed before the poll had been
+                     * switched to writable for a just-queued write (an end()
+                     * issued in the same tick as connect): the queued bytes
+                     * never flushed, their drain callback never fired, and the
+                     * stream's 'finish' never happened - the FIN-terminated
+                     * http response tests hung on every Linux target. The
+                     * writable dispatch disables writable polling again once
+                     * the buffer is drained, so this does not busy-poll. */
+                    us_poll_change(&s->p, loop, LIBUS_SOCKET_WRITABLE);
                     s = s->ssl ? us_internal_ssl_on_end(s) : us_dispatch_end(s);
                 } else {
                     /* We dont allow half open just emit end and close the socket */

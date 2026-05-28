@@ -441,7 +441,10 @@ function SocketEmitEndNT(self, _err?) {
   // Windows, where loopback RSTs at teardown are routine. A reset while the
   // socket is still writing (the peer aborted mid-transfer) is real and is
   // surfaced (test-net-error-twice).
-  const teardownNoise = self[kended] && (self.writableFinished || self.writableEnded);
+  // writableFinished (everything actually flushed) - NOT writableEnded (end()
+  // merely called): a peer reset while queued data is still unflushed is the
+  // peer aborting mid-transfer and must surface (test-net-error-twice).
+  const teardownNoise = self[kended] && self.writableFinished;
   if (_err && !self.destroyed && !teardownNoise && self.listenerCount("error") > 0) {
     // The consumer can detach its 'error' listener between this close
     // callback and destroy()'s deferred 'error' emission (a request that
