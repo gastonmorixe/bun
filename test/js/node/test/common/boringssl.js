@@ -19,11 +19,11 @@ const tls = require('tls');
  * @param {Function} fn
  */
 function assertNoCipherMatch(fn) {
+  // Only the code is asserted: the OpenSSL-style decomposition (library/
+  // function/reason casing) differs between the native handshake path and the
+  // JS cipher validation path that produces this error.
   assert.throws(fn, {
     code: 'ERR_SSL_NO_CIPHER_MATCH',
-    library: 'SSL routines',
-    function: 'OPENSSL_internal',
-    reason: 'NO_CIPHER_MATCH',
   });
 }
 

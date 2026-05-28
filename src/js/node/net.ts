@@ -1016,12 +1016,22 @@ const SocketHandlers2: SocketHandler<NonNullable<import("node:net").Socket["_han
 // so a server without an SNICallback or ALPNCallback does not pay a JS
 // round-trip from inside the handshake for them.
 const { serverName: _serverNameHandler, alpnCallback: _alpnCallbackHandler, ...ServerHandlersNoSNI } = ServerHandlers;
+// Partial tables so a server with exactly one of the callbacks only registers
+// that dispatch (the other would be a per-handshake JS round-trip that always
+// falls through).
+const { serverName: _snOnly, ...ServerHandlersALPNOnly } = ServerHandlers;
+const { alpnCallback: _acOnly, ...ServerHandlersSNIOnly } = ServerHandlers;
 
 /** The handler table for a listen config: the full table only when a
  *  per-connection callback is configured, so other servers never pay a JS
  *  round-trip from inside the handshake. */
 function serverHandlersFor(server) {
-  return server._SNICallback || server._ALPNCallback ? ServerHandlers : ServerHandlersNoSNI;
+  const sni = !!server._SNICallback;
+  const alpn = !!server._ALPNCallback;
+  if (sni && alpn) return ServerHandlers;
+  if (sni) return ServerHandlersSNIOnly;
+  if (alpn) return ServerHandlersALPNOnly;
+  return ServerHandlersNoSNI;
 }
 
 function kConnectTcp(self, addressType, req, address, port) {
@@ -3318,6 +3328,10 @@ function formatListenError(err, address, port) {
   const desc = err && typeof err.code === "string" ? uvListenErrorDescription(err.code) : undefined;
   if (desc) {
     err.syscall = "listen";
+    // Node's exceptionWithHostPort also exposes the failing address/port as
+    // own properties; user code commonly reads them off listen errors.
+    err.address = address;
+    if (port) err.port = port;
     const where = port ? `${address}:${port}` : address;
     err.message = `listen ${err.code}: ${desc}${where ? ` ${where}` : ""}`;
   }
